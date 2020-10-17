@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, error::Error, fmt, sync::Arc};
+use std::{collections::HashMap, error::Error, fmt, sync::Arc};
 
 use reqwest::Client;
 
@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let res = futures::future::try_join_all(config.sites.into_iter().map(|site| {
         tokio::spawn(async move {
             let site = Arc::new(site);
-            println!("{:?}", site);
+            println!("watching {}", site.name);
 
             let client = Client::builder()
                 .user_agent("zulip client by @bjorn3")
@@ -65,13 +65,13 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
             let mut queue = EventQueue::register_new(&client, site.clone()).await?;
 
-            println!("queue for {}: {:#?}", site.name, queue);
+            println!("queue for {}: {}", site.name, queue.queue_id.0);
 
             loop {
                 let events = queue.long_poll(&client).await?;
                 for event in events {
                     match event.rest {
-                        EventType::Heartbeat => println!("heartbeat"),
+                        EventType::Heartbeat => {}
                         EventType::Message { flags, message } => {
                             let is_important = flags.contains(&MessageFlag::Mentioned)
                                 || flags.contains(&MessageFlag::HasAlertWord);
@@ -241,7 +241,7 @@ impl EventQueue {
         let register_resp = site
             .post(
                 client,
-                "register?event_types=%5B%22message%22%5D&all_public_streams=true",
+                "register?event_types=%5B%22message%22%5D&all_public_streams=false",
             )
             .send()
             .await?
