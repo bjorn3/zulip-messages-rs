@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, fmt, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, error::Error, fmt, sync::Arc};
 
 use reqwest::Client;
 
@@ -75,12 +75,20 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                         EventType::Message { flags, message } => {
                             let is_important = flags.contains(&MessageFlag::Mentioned)
                                 || flags.contains(&MessageFlag::HasAlertWord);
+
                             println!(
-                                "{} {} {}",
+                                "{} {:<20} {}",
                                 if is_important { "!" } else { " " },
                                 site.name,
                                 message
                             );
+
+                            if is_important {
+                                notify_rust::Notification::new()
+                                    .summary(&format!("{} {}", site.name, message.header()))
+                                    .body(&message.content)
+                                    .show()?;
+                            }
                         }
                         EventType::Other => println!("unknown event"),
                     }
@@ -146,7 +154,6 @@ struct Message {
     content: String,
     display_recipient: MessageRecipients,
     //id: u64,
-    is_me_message: bool,
     //reactions: Vec<serde_json::Value>,
     sender_full_name: String,
     //stream_id: Option<u64>,
@@ -156,17 +163,20 @@ struct Message {
     type_: String, // stream or private
 }
 
-impl fmt::Display for Message {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "[{}] @{} -> {}: {}{}",
+impl Message {
+    fn header(&self) -> String {
+        format!(
+            "[{}] @{} -> {}",
             self.timestamp.with_timezone(&chrono::Local).time(),
             self.sender_full_name,
             self.display_recipient,
-            if self.is_me_message { "/me " } else { "" },
-            self.content,
         )
+    }
+}
+
+impl fmt::Display for Message {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.header(), self.content)
     }
 }
 
